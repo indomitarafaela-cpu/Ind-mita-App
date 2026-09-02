@@ -371,8 +371,10 @@
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita el preflight CORS
         body: JSON.stringify({ action, payload })
       });
+      const textoCrudo = await res.text();
+      alert('DIAGNÓSTICO: código HTTP=' + res.status + ' (redirigido=' + res.redirected + ') | URL final=' + res.url + ' | Respuesta cruda (primeros 300 caracteres): ' + textoCrudo.substring(0, 300));
       if (!res.ok) throw new Error('Error de red (' + res.status + ')');
-      return res.json();
+      return JSON.parse(textoCrudo);
     }
 
     function parseNumeroSeguro(val) {
