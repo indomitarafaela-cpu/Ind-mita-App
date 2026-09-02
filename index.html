@@ -353,7 +353,7 @@
 
   <script>
     // URL de tu Apps Script publicado como aplicación web (termina en /exec)
-    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby84J_JDpTt-DHrdkFmiwHtWjG8qUk7To1NlwaG1-8dx9mnEybKshQIjPO4GfPhHdT5eg/exec';
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxh7fbISDmdD9tkZj39-FgdZNXMZElIbxwXLW0jk_PM-dXPrRlMxPXiYH2I8j53nml31w/exec';
 
     let appData = { stock: [], ventas: [], categorias: [] };
     let modalPrendaInstance = null;
@@ -371,10 +371,8 @@
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita el preflight CORS
         body: JSON.stringify({ action, payload })
       });
-      const textoCrudo = await res.text();
-      alert('DIAGNÓSTICO: código HTTP=' + res.status + ' (redirigido=' + res.redirected + ') | URL final=' + res.url + ' | Respuesta cruda (primeros 300 caracteres): ' + textoCrudo.substring(0, 300));
       if (!res.ok) throw new Error('Error de red (' + res.status + ')');
-      return JSON.parse(textoCrudo);
+      return res.json();
     }
 
     function parseNumeroSeguro(val) {
@@ -757,7 +755,6 @@
 
     function guardarPrendaForm(e) {
       e.preventDefault();
-      alert('PASO 1: Se apretó Guardar y el formulario es válido. Ahora se va a mandar a Google.');
 
       const selectCat = document.getElementById('selectPrendaCategoria').value;
       let categoriaFinal = selectCat;
@@ -782,13 +779,9 @@
       if (modalPrendaInstance) modalPrendaInstance.hide();
 
       llamarBackendPOST('guardarPrenda', datos)
-        .then((res) => {
-          alert('PASO 2: Google respondió. status=' + res.status + ' | mensaje=' + (res.message || '(ninguno)'));
-          procesarRespuestaBackend(res);
-        })
+        .then((res) => { procesarRespuestaBackend(res); })
         .catch((err) => {
           mostrarSpinner(false);
-          alert('ERROR: no se pudo conectar con Google. Detalle: ' + (err.message || err));
           mostrarError('Error al guardar prenda: ' + (err.message || err));
         });
     }
