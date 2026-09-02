@@ -755,6 +755,7 @@
 
     function guardarPrendaForm(e) {
       e.preventDefault();
+      alert('PASO 1: Se apretó Guardar y el formulario es válido. Ahora se va a mandar a Google.');
 
       const selectCat = document.getElementById('selectPrendaCategoria').value;
       let categoriaFinal = selectCat;
@@ -779,9 +780,13 @@
       if (modalPrendaInstance) modalPrendaInstance.hide();
 
       llamarBackendPOST('guardarPrenda', datos)
-        .then((res) => { procesarRespuestaBackend(res); })
+        .then((res) => {
+          alert('PASO 2: Google respondió. status=' + res.status + ' | mensaje=' + (res.message || '(ninguno)'));
+          procesarRespuestaBackend(res);
+        })
         .catch((err) => {
           mostrarSpinner(false);
+          alert('ERROR: no se pudo conectar con Google. Detalle: ' + (err.message || err));
           mostrarError('Error al guardar prenda: ' + (err.message || err));
         });
     }
