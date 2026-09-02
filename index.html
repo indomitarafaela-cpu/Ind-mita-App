@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>INDÓMITA STOCK Y VENTAS</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary-color: #212529;
+      --accent-color: #0d6efd;
+      --bg-color: #f8f9fa;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-transform: uppercase;
+    }
+
+    input[type="text"], input[type="search"], textarea, select {
+      text-transform: uppercase;
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .card-product {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      transition: transform 0.2s;
+    }
+
+    .card-product:hover {
+      transform: translateY(-3px);
+    }
+
+    .product-img {
+      height: 180px;
+      object-fit: cover;
+      border-top-left-radius: 12px;
+      border-top-right-radius: 12px;
+      background-color: #e9ecef;
+    }
+
+    .spinner-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(255,255,255,0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    .fecha-header-row {
+      background-color: #e2e3e5 !important;
+      font-weight: bold;
+      color: #383d41;
+    }
+
+    .d-none {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Spinner de Carga -->
+  <div id="loadingSpinner" class="spinner-overlay">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+      <span class="visually-hidden">CARGANDO...</span>
+    </div>
+    <div class="mt-3 text-secondary fw-semibold">CARGANDO SISTEMA DE INDÓMITA...</div>
+  </div>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">
+        <i class="bi bi-tag-fill me-2"></i>INDÓMITA
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item">
+            <a class="nav-link active" id="btnNavStock" href="#" onclick="cambiarVista('stock')"><i class="bi bi-box-seam me-1"></i> STOCK</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="btnNavVentas" href="#" onclick="cambiarVista('ventas')"><i class="bi bi-receipt me-1"></i> VENTAS</a>
+          </li>
+        </ul>
+
+        <!-- Menú Descarga Planillas -->
+        <div class="dropdown me-2">
+          <button class="btn btn-outline-light dropdown-toggle" type="button" id="dropdownDescargas" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-download me-1"></i> DESCARGAR PLANILLAS
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownDescargas">
+            <li><a class="dropdown-menu-item dropdown-item" href="#" onclick="descargarCSV('stock')"><i class="bi bi-file-earmark-excel text-success me-2"></i>DESCARGAR STOCK (CSV)</a></li>
+            <li><a class="dropdown-menu-item dropdown-item" href="#" onclick="descargarCSV('ventas')"><i class="bi bi-file-earmark-excel text-primary me-2"></i>DESCARGAR VENTAS (CSV)</a></li>
+          </ul>
+        </div>
+
+        <button class="btn btn-primary" onclick="abrirModalPrenda()">
+          <i class="bi bi-plus-lg me-1"></i> NUEVA PRENDA
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Contenido Principal -->
+  <div class="container my-4">
+
+    <!-- Banner de Error -->
+    <div id="errorBanner" class="alert alert-danger d-none alert-dismissible fade show" role="alert">
+      <strong>¡ATENCIÓN!</strong> <span id="errorBannerText"></span>
+      <button type="button" class="btn-close" onclick="ocultarError()"></button>
+    </div>
+    
+    <!-- Filtros y Búsqueda -->
+    <div class="row g-3 mb-4 align-items-center">
+      <div class="col-md-6">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" id="inputBuscar" class="form-control" placeholder="BUSCAR POR CÓDIGO, NOMBRE, CATEGORÍA..." onkeyup="filtrarDatos()">
+        </div>
+      </div>
+      <div class="col-md-4">
+        <select id="selectCategoriaFiltro" class="form-select" onchange="filtrarDatos()">
+          <option value="">TODAS LAS CATEGORÍAS</option>
+        </select>
+      </div>
+      <div class="col-md-2 text-end">
+        <span class="badge bg-secondary p-2 w-100" id="totalRegistros">0 PRENDAS</span>
+      </div>
+    </div>
+
+    <!-- Vista de Stock -->
+    <div id="vistaStock">
+      <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4" id="contenedorStock">
+        <!-- Contenido dinámico -->
+      </div>
+    </div>
+
+    <!-- Vista de Ventas -->
+    <div id="vistaVentas" class="d-none">
+      <div class="table-responsive bg-white rounded shadow-sm p-3">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>FECHA</th>
+              <th>CÓDIGO</th>
+              <th>PRENDA</th>
+              <th>TALLE / COLOR</th>
+              <th>PRECIO</th>
+              <th>DESC. (%)</th>
+              <th>MONTO FINAL</th>
+              <th>MÉTODO PAGO</th>
+              <th>FACTURADA</th>
+            </tr>
+          </thead>
+          <tbody id="tablaVentas">
+            <!-- Contenido dinámico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal Prenda -->
+  <div class="modal fade" id="modalPrenda" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title" id="tituloModalPrenda">NUEVA PRENDA</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="formPrenda" onsubmit="guardarPrendaForm(event)">
+          <div class="modal-body">
+            
+            <div class="mb-2">
+              <label class="form-label fw-bold">TIPO DE CÓDIGO</label>
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="tipoCodigo" id="codManual" value="manual" checked onchange="toggleModoCodigo()">
+                <label class="btn btn-outline-secondary" for="codManual">MANUAL</label>
+                
+                <input type="radio" class="btn-check" name="tipoCodigo" id="codAuto" value="auto" onchange="toggleModoCodigo()">
+                <label class="btn btn-outline-secondary" for="codAuto">AUTOMÁTICO</label>
+              </div>
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold">CÓDIGO</label>
+                <input type="text" id="prendaCodigo" class="form-control" placeholder="EJ: REM-001" required>
+              </div>
+
+              <div class="col-6">
+                <label class="form-label fw-bold">CATEGORÍA</label>
+                <select id="selectPrendaCategoria" class="form-select" onchange="toggleNuevaCategoria()" required>
+                  <option value="">SELECCIONAR...</option>
+                  <option value="__NUEVA__">+ AGREGAR NUEVA CATEGORÍA...</option>
+                </select>
+                <input type="text" id="inputNuevaCategoria" class="form-control mt-2 d-none" placeholder="NOMBRE DE CATEGORÍA...">
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label fw-bold">NOMBRE / DESCRIPCIÓN</label>
+              <input type="text" id="prendaNombre" class="form-control" required>
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold">TALLE</label>
+                <input type="text" id="prendaTalle" class="form-control" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold">COLOR</label>
+                <input type="text" id="prendaColor" class="form-control" required>
+              </div>
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold">COSTO ($) <span class="text-muted fw-normal">(OPCIONAL)</span></label>
+                <input type="number" step="0.01" id="prendaCosto" class="form-control" placeholder="0.00">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold">PRECIO ($)</label>
+                <input type="number" step="0.01" id="prendaPrecio" class="form-control" required>
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label fw-bold">PROVEEDOR</label>
+              <input type="text" id="prendaProveedor" class="form-control">
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label fw-bold">FOTO DE LA PRENDA</label>
+              <input type="file" id="prendaFotoInput" class="form-control" accept="image/*" onchange="previewImagen(event)">
+              <input type="hidden" id="prendaFotoBase64">
+              <img id="imgPreview" class="img-thumbnail mt-2 d-none" style="max-height: 120px;">
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">CANCELAR</button>
+            <button type="submit" class="btn btn-primary">GUARDAR PRENDA</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Venta -->
+  <div class="modal fade" id="modalVenta" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">REGISTRAR VENTA</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="formVenta" onsubmit="guardarVentaForm(event)">
+          <div class="modal-body">
+            <input type="hidden" id="ventaCodigo">
+            <input type="hidden" id="ventaNombre">
+            <input type="hidden" id="ventaCategoria">
+            <input type="hidden" id="ventaTalle">
+            <input type="hidden" id="ventaColor">
+            
+            <div class="p-2 mb-3 bg-light rounded">
+              <p class="mb-1 fw-bold" id="lblVentaProducto">PRODUCTO: -</p>
+              <p class="mb-0 text-muted" id="lblVentaDetalle">DETALLES: -</p>
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold">PRECIO LISTA ($)</label>
+                <input type="number" step="0.01" id="ventaPrecio" class="form-control" readonly>
+              </div>
+
+              <div class="col-6">
+                <label class="form-label fw-bold">DESCUENTO (%)</label>
+                <div class="input-group">
+                  <input type="number" step="0.1" min="0" max="100" id="ventaDescuento" class="form-control" value="0" oninput="calcularTotalVenta()">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label fw-bold">MONTO FINAL ($)</label>
+              <input type="number" step="0.01" id="ventaMontoFinal" class="form-control fw-bold text-success fs-5" readonly>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label fw-bold">MÉTODO DE PAGO</label>
+              <select id="ventaMetodoPago" class="form-select" onchange="toggleCuotas()">
+                <option value="EFECTIVO">EFECTIVO</option>
+                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                <option value="TARJETA DE DÉBITO">TARJETA DE DÉBITO</option>
+                <option value="TARJETA DE CRÉDITO">TARJETA DE CRÉDITO</option>
+                <option value="MERCADO PAGO">MERCADO PAGO</option>
+              </select>
+            </div>
+
+            <div class="mb-2 d-none" id="grpCuotas">
+              <label class="form-label fw-bold">CUOTAS</label>
+              <select id="ventaCuotas" class="form-select">
+                <option value="1">1 CUOTA</option>
+                <option value="3">3 CUOTAS</option>
+                <option value="6">6 CUOTAS</option>
+                <option value="9">9 CUOTAS</option>
+                <option value="12">12 CUOTAS</option>
+              </select>
+            </div>
+
+            <div class="form-check form-switch mt-3">
+              <input class="form-check-input" type="checkbox" id="ventaFacturada">
+              <label class="form-check-label fw-bold" for="ventaFacturada">¿FACTURAR VENTA?</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">CANCELAR</button>
+            <button type="submit" class="btn btn-success">CONFIRMAR VENTA</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // URL de tu Apps Script publicado como aplicación web (termina en /exec)
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby84J_JDpTt-DHrdkFmiwHtWjG8qUk7To1NlwaG1-8dx9mnEybKshQIjPO4GfPhHdT5eg/exec';
+
+    let appData = { stock: [], ventas: [], categorias: [] };
+    let modalPrendaInstance = null;
+    let modalVentaInstance = null;
+
+    async function llamarBackendGET(action) {
+      const res = await fetch(`${APPS_SCRIPT_URL}?action=${encodeURIComponent(action)}`);
+      if (!res.ok) throw new Error('Error de red (' + res.status + ')');
+      return res.json();
+    }
+
+    async function llamarBackendPOST(action, payload) {
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita el preflight CORS
+        body: JSON.stringify({ action, payload })
+      });
+      if (!res.ok) throw new Error('Error de red (' + res.status + ')');
+      return res.json();
+    }
+
+    function parseNumeroSeguro(val) {
+      if (val === null || val === undefined) return 0;
+      if (typeof val === 'number') return isNaN(val) ? 0 : val;
+      
+      let str = String(val).trim();
+      if (!str || str.toLowerCase() === 'nan') return 0;
+
+      if (str.includes('.') && str.includes(',')) {
+        str = str.replace(/\./g, '').replace(',', '.');
+      } else if (str.includes('.') && !str.includes(',')) {
+        const partes = str.split('.');
+        if (partes.length > 1 && partes[partes.length - 1].length === 3) {
+          str = str.replace(/\./g, '');
+        }
+      } else if (str.includes(',')) {
+        str = str.replace(',', '.');
+      }
+
+      const limpio = str.replace(/[^0-9.-]/g, '');
+      const num = parseFloat(limpio);
+      return isNaN(num) ? 0 : num;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        const elPrenda = document.getElementById('modalPrenda');
+        const elVenta = document.getElementById('modalVenta');
+        if (elPrenda) modalPrendaInstance = new bootstrap.Modal(elPrenda);
+        if (elVenta) modalVentaInstance = new bootstrap.Modal(elVenta);
+      } catch (e) {
+        console.error("Error al inicializar Modales:", e);
+      }
+      cargarDatosIniciales();
+    });
+
+    function mostrarSpinner(show) {
+      const spinner = document.getElementById('loadingSpinner');
+      if (spinner) {
+        if (show) spinner.classList.remove('d-none');
+        else spinner.classList.add('d-none');
+      }
+    }
+
+    function mostrarError(mensaje) {
+      const banner = document.getElementById('errorBanner');
+      const text = document.getElementById('errorBannerText');
+      if (banner && text) {
+        text.innerText = String(mensaje).toUpperCase();
+        banner.classList.remove('d-none');
+      }
+      mostrarSpinner(false);
+    }
+
+    function ocultarError() {
+      const banner = document.getElementById('errorBanner');
+      if (banner) banner.classList.add('d-none');
+    }
+
+    function procesarRespuestaBackend(response) {
+      mostrarSpinner(false);
+      if (!response) {
+        mostrarError("No se obtuvo respuesta del servidor.");
+        return false;
+      }
+      if (response.status === 'error') {
+        mostrarError(response.message || "Error al procesar la información.");
+        return false;
+      }
+      
+      ocultarError();
+      appData.stock = Array.isArray(response.stock) ? response.stock : [];
+      appData.ventas = Array.isArray(response.ventas) ? response.ventas : [];
+      appData.categorias = Array.isArray(response.categorias) ? response.categorias : [];
+
+      poblarCategorias();
+      renderizarStock(appData.stock);
+      renderizarVentas(appData.ventas);
+      return true;
+    }
+
+    async function cargarDatosIniciales() {
+      mostrarSpinner(true);
+      ocultarError();
+
+      try {
+        const res = await llamarBackendGET('getInitialData');
+        procesarRespuestaBackend(res);
+      } catch (err) {
+        mostrarSpinner(false);
+        mostrarError("Error del Servidor: " + (err.message || err));
+      }
+    }
+
+    function cambiarVista(vista) {
+      const vStock = document.getElementById('vistaStock');
+      const vVentas = document.getElementById('vistaVentas');
+      const btnStock = document.getElementById('btnNavStock');
+      const btnVentas = document.getElementById('btnNavVentas');
+
+      if (vista === 'stock') {
+        vStock.classList.remove('d-none');
+        vVentas.classList.add('d-none');
+        btnStock.classList.add('active');
+        btnVentas.classList.remove('active');
+      } else {
+        vStock.classList.add('d-none');
+        vVentas.classList.remove('d-none');
+        btnStock.classList.remove('active');
+        btnVentas.classList.add('active');
+      }
+    }
+
+    function poblarCategorias() {
+      const selectFiltro = document.getElementById('selectCategoriaFiltro');
+      if (selectFiltro) {
+        selectFiltro.innerHTML = '<option value="">TODAS LAS CATEGORÍAS</option>';
+        appData.categorias.forEach(cat => {
+          const catUpper = String(cat).toUpperCase();
+          selectFiltro.innerHTML += `<option value="${catUpper}">${catUpper}</option>`;
+        });
+      }
+
+      const selectForm = document.getElementById('selectPrendaCategoria');
+      if (selectForm) {
+        selectForm.innerHTML = '<option value="">SELECCIONAR...</option>';
+        appData.categorias.forEach(cat => {
+          const catUpper = String(cat).toUpperCase();
+          selectForm.innerHTML += `<option value="${catUpper}">${catUpper}</option>`;
+        });
+        selectForm.innerHTML += '<option value="__NUEVA__">+ AGREGAR NUEVA CATEGORÍA...</option>';
+      }
+    }
+
+    function toggleNuevaCategoria() {
+      const select = document.getElementById('selectPrendaCategoria');
+      const input = document.getElementById('inputNuevaCategoria');
+      if (select.value === '__NUEVA__') {
+        input.classList.remove('d-none');
+        input.required = true;
+        input.focus();
+      } else {
+        input.classList.add('d-none');
+        input.required = false;
+        input.value = '';
+      }
+    }
+
+    function renderizarStock(items) {
+      const contenedor = document.getElementById('contenedorStock');
+      const totalLbl = document.getElementById('totalRegistros');
+      if (totalLbl) totalLbl.innerText = `${items.length} PRENDAS`;
+
+      if (!contenedor) return;
+
+      if (!items || items.length === 0) {
+        contenedor.innerHTML = `
+          <div class="col-12 text-center py-5 text-muted">
+            <i class="bi bi-box-seam display-1 mb-3 text-secondary"></i>
+            <h4>NO HAY PRENDAS DISPONIBLES EN STOCK</h4>
+            <p>PRESIONA "NUEVA PRENDA" PARA INGRESAR UN PRODUCTO.</p>
+          </div>`;
+        return;
+      }
+
+      const defaultImg = 'https://via.placeholder.com/300x200?text=SIN+IMAGEN';
+
+      contenedor.innerHTML = items.map(item => {
+        const precioNum = parseNumeroSeguro(item.precio);
+        return `
+        <div class="col">
+          <div class="card card-product h-100 position-relative">
+            <img src="${item.foto || defaultImg}" class="card-img-top product-img" alt="${item.nombre}" onerror="this.src='${defaultImg}'">
+            <div class="card-body d-flex flex-column">
+              <span class="badge bg-primary mb-2 align-self-start">${(item.categoria || 'SIN CAT.').toUpperCase()}</span>
+              <h6 class="card-title fw-bold text-dark mb-1">${(item.nombre || '').toUpperCase()}</h6>
+              <p class="card-text text-muted small mb-2">
+                CÓD: <strong>${(item.codigo || '').toUpperCase()}</strong> | TALLE: <strong>${(item.talle || '').toUpperCase()}</strong> | COLOR: <strong>${(item.color || '').toUpperCase()}</strong>
+              </p>
+              <div class="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
+                <span class="fs-5 fw-bold text-success">$${precioNum.toLocaleString('es-AR')}</span>
+                <div class="btn-group btn-group-sm">
+                  <button class="btn btn-outline-success" title="Registrar Venta" onclick="abrirModalVenta('${item.codigo}')">
+                    <i class="bi bi-cart-check-fill"></i>
+                  </button>
+                  <button class="btn btn-outline-primary" title="Editar Prenda" onclick="editarPrenda('${item.codigo}')">
+                    <i class="bi bi-pencil-square"></i>
+                  </button>
+                  <button class="btn btn-outline-danger" title="Eliminar de Planilla" onclick="eliminarPrenda('${item.codigo}')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `}).join('');
+    }
+
+    function parseFechaDate(strFecha) {
+      if (!strFecha) return new Date(0);
+      const partes = strFecha.split(' ');
+      const fechaPartes = partes[0].split(/[-/]/);
+      const horaPartes = partes[1] ? partes[1].split(':') : [0, 0];
+
+      if (fechaPartes.length === 3) {
+        if (fechaPartes[0].length === 4) {
+          return new Date(fechaPartes[0], fechaPartes[1] - 1, fechaPartes[2], horaPartes[0] || 0, horaPartes[1] || 0);
+        } else {
+          return new Date(fechaPartes[2], fechaPartes[1] - 1, fechaPartes[0], horaPartes[0] || 0, horaPartes[1] || 0);
+        }
+      }
+      return new Date(strFecha);
+    }
+
+    function renderizarVentas(ventas) {
+      const tabla = document.getElementById('tablaVentas');
+      if (!tabla) return;
+
+      if (!ventas || ventas.length === 0) {
+        tabla.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">SIN VENTAS REGISTRADAS AÚN.</td></tr>';
+        return;
+      }
+
+      const ventasOrdenadas = [...ventas].sort((a, b) => {
+        return parseFechaDate(b.fecha) - parseFechaDate(a.fecha);
+      });
+
+      let html = '';
+      let ultimaFechaDia = '';
+
+      ventasOrdenadas.forEach(v => {
+        const precioNum = parseNumeroSeguro(v.precio);
+        const descNum = parseNumeroSeguro(v.descuento);
+        const montoFinalNum = parseNumeroSeguro(v.montoFinal);
+        const fechaDiaOnly = String(v.fecha).split(' ')[0];
+
+        if (fechaDiaOnly && fechaDiaOnly !== ultimaFechaDia) {
+          ultimaFechaDia = fechaDiaOnly;
+          html += `
+            <tr class="fecha-header-row">
+              <td colspan="9" class="py-2 px-3 border-top border-bottom">
+                <i class="bi bi-calendar3 me-2 text-primary"></i> <strong>VENTAS DEL DÍA: ${fechaDiaOnly}</strong>
+              </td>
+            </tr>
+          `;
+        }
+
+        html += `
+          <tr>
+            <td><small class="fw-semibold">${v.fecha}</small></td>
+            <td><strong>${(v.codigo || '').toUpperCase()}</strong></td>
+            <td>${(v.nombre || '').toUpperCase()}</td>
+            <td>${(v.talle || '').toUpperCase()} / ${(v.color || '').toUpperCase()}</td>
+            <td>$${precioNum.toLocaleString('es-AR')}</td>
+            <td class="text-danger fw-bold">${descNum}%</td>
+            <td class="fw-bold text-success">$${montoFinalNum.toLocaleString('es-AR')}</td>
+            <td>${(v.metodoPago || '').toUpperCase()} ${v.cuotas > 1 ? `(${v.cuotas}X)` : ''}</td>
+            <td>
+              <span class="badge ${String(v.facturada).toUpperCase() === 'SÍ' ? 'bg-success' : 'bg-secondary'}">
+                ${(v.facturada || 'NO').toUpperCase()}
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+
+      tabla.innerHTML = html;
+    }
+
+    function filtrarDatos() {
+      const texto = (document.getElementById('inputBuscar').value || '').toUpperCase();
+      const categoria = (document.getElementById('selectCategoriaFiltro').value || '').toUpperCase();
+
+      const filtrados = appData.stock.filter(item => {
+        const coincideTexto = (item.codigo || '').toUpperCase().includes(texto) ||
+                              (item.nombre || '').toUpperCase().includes(texto) ||
+                              (item.categoria || '').toUpperCase().includes(texto);
+        const coincideCat = !categoria || (item.categoria || '').toUpperCase() === categoria;
+        return coincideTexto && coincideCat;
+      });
+
+      renderizarStock(filtrados);
+    }
+
+    function toggleModoCodigo() {
+      const esManual = document.getElementById('codManual').checked;
+      const inputCodigo = document.getElementById('prendaCodigo');
+      if (esManual) {
+        inputCodigo.readOnly = false;
+        inputCodigo.placeholder = 'EJ: REM-001';
+      } else {
+        inputCodigo.readOnly = true;
+        inputCodigo.placeholder = '(AUTOMÁTICO)';
+        inputCodigo.value = '';
+      }
+    }
+
+    function abrirModalPrenda() {
+      document.getElementById('formPrenda').reset();
+      document.getElementById('prendaFotoBase64').value = '';
+      document.getElementById('codManual').checked = true;
+      toggleModoCodigo();
+      
+      document.getElementById('selectPrendaCategoria').value = '';
+      toggleNuevaCategoria();
+
+      const img = document.getElementById('imgPreview');
+      if (img) img.classList.add('d-none');
+      document.getElementById('tituloModalPrenda').innerText = 'NUEVA PRENDA';
+      if (modalPrendaInstance) modalPrendaInstance.show();
+    }
+
+    function editarPrenda(codigo) {
+      const codUpper = String(codigo).toUpperCase();
+      const item = appData.stock.find(p => String(p.codigo).toUpperCase() === codUpper);
+      if (!item) return;
+
+      document.getElementById('codManual').checked = true;
+      toggleModoCodigo();
+
+      const inputCodigo = document.getElementById('prendaCodigo');
+      inputCodigo.value = (item.codigo || '').toUpperCase();
+      inputCodigo.readOnly = true;
+
+      const selectCat = document.getElementById('selectPrendaCategoria');
+      const itemCatUpper = (item.categoria || '').toUpperCase();
+
+      if (appData.categorias.map(c => String(c).toUpperCase()).includes(itemCatUpper)) {
+        selectCat.value = itemCatUpper;
+        toggleNuevaCategoria();
+      } else if (itemCatUpper) {
+        selectCat.value = '__NUEVA__';
+        toggleNuevaCategoria();
+        document.getElementById('inputNuevaCategoria').value = itemCatUpper;
+      } else {
+        selectCat.value = '';
+        toggleNuevaCategoria();
+      }
+
+      document.getElementById('prendaNombre').value = (item.nombre || '').toUpperCase();
+      document.getElementById('prendaTalle').value = (item.talle || '').toUpperCase();
+      document.getElementById('prendaColor').value = (item.color || '').toUpperCase();
+      document.getElementById('prendaCosto').value = item.costo || '';
+      document.getElementById('prendaPrecio').value = item.precio || '';
+      document.getElementById('prendaProveedor').value = (item.proveedor || '').toUpperCase();
+      document.getElementById('prendaFotoBase64').value = item.foto || '';
+
+      const img = document.getElementById('imgPreview');
+      if (item.foto && img) {
+        img.src = item.foto;
+        img.classList.remove('d-none');
+      } else if (img) {
+        img.classList.add('d-none');
+      }
+
+      document.getElementById('tituloModalPrenda').innerText = `EDITAR PRENDA (${item.codigo.toUpperCase()})`;
+      if (modalPrendaInstance) modalPrendaInstance.show();
+    }
+
+    function previewImagen(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('prendaFotoBase64').value = e.target.result;
+          const img = document.getElementById('imgPreview');
+          if (img) {
+            img.src = e.target.result;
+            img.classList.remove('d-none');
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function guardarPrendaForm(e) {
+      e.preventDefault();
+
+      const selectCat = document.getElementById('selectPrendaCategoria').value;
+      let categoriaFinal = selectCat;
+      if (selectCat === '__NUEVA__') {
+        categoriaFinal = document.getElementById('inputNuevaCategoria').value.trim();
+      }
+
+      const datos = {
+        codigo: document.getElementById('prendaCodigo').value.toUpperCase(),
+        categoria: categoriaFinal.toUpperCase(),
+        nombre: document.getElementById('prendaNombre').value.toUpperCase(),
+        talle: document.getElementById('prendaTalle').value.toUpperCase(),
+        color: document.getElementById('prendaColor').value.toUpperCase(),
+        costo: document.getElementById('prendaCosto').value,
+        precio: document.getElementById('prendaPrecio').value,
+        proveedor: document.getElementById('prendaProveedor').value.toUpperCase(),
+        foto: document.getElementById('prendaFotoBase64').value
+      };
+
+      mostrarSpinner(true);
+      if (modalPrendaInstance) modalPrendaInstance.hide();
+
+      llamarBackendPOST('guardarPrenda', datos)
+        .then((res) => { procesarRespuestaBackend(res); })
+        .catch((err) => {
+          mostrarSpinner(false);
+          mostrarError('Error al guardar prenda: ' + (err.message || err));
+        });
+    }
+
+    function abrirModalVenta(codigo) {
+      const codUpper = String(codigo).toUpperCase();
+      const item = appData.stock.find(p => String(p.codigo).toUpperCase() === codUpper);
+      if (!item) return;
+
+      document.getElementById('formVenta').reset();
+      document.getElementById('ventaCodigo').value = (item.codigo || '').toUpperCase();
+      document.getElementById('ventaNombre').value = (item.nombre || '').toUpperCase();
+      document.getElementById('ventaCategoria').value = (item.categoria || '').toUpperCase();
+      document.getElementById('ventaTalle').value = (item.talle || '').toUpperCase();
+      document.getElementById('ventaColor').value = (item.color || '').toUpperCase();
+      document.getElementById('ventaPrecio').value = parseNumeroSeguro(item.precio);
+
+      document.getElementById('lblVentaProducto').innerText = `PRODUCTO: ${item.nombre.toUpperCase()} (${item.codigo.toUpperCase()})`;
+      document.getElementById('lblVentaDetalle').innerText = `CATEGORÍA: ${(item.categoria || '-').toUpperCase()} | TALLE: ${item.talle.toUpperCase()} | COLOR: ${item.color.toUpperCase()}`;
+
+      calcularTotalVenta();
+      if (modalVentaInstance) modalVentaInstance.show();
+    }
+
+    function toggleCuotas() {
+      const metodo = document.getElementById('ventaMetodoPago').value;
+      const grp = document.getElementById('grpCuotas');
+      if (grp) {
+        if (metodo === 'TARJETA DE CRÉDITO') grp.classList.remove('d-none');
+        else grp.classList.add('d-none');
+      }
+    }
+
+    function calcularTotalVenta() {
+      const precio = parseFloat(document.getElementById('ventaPrecio').value) || 0;
+      const descPorcentaje = parseFloat(document.getElementById('ventaDescuento').value) || 0;
+      
+      const montoDescuento = (precio * descPorcentaje) / 100;
+      const total = Math.max(0, precio - montoDescuento);
+      
+      document.getElementById('ventaMontoFinal').value = total.toFixed(2);
+    }
+
+    function guardarVentaForm(e) {
+      e.preventDefault();
+      const datos = {
+        codigo: document.getElementById('ventaCodigo').value.toUpperCase(),
+        nombre: document.getElementById('ventaNombre').value.toUpperCase(),
+        categoria: document.getElementById('ventaCategoria').value.toUpperCase(),
+        talle: document.getElementById('ventaTalle').value.toUpperCase(),
+        color: document.getElementById('ventaColor').value.toUpperCase(),
+        precio: document.getElementById('ventaPrecio').value,
+        descuento: document.getElementById('ventaDescuento').value,
+        montoFinal: document.getElementById('ventaMontoFinal').value,
+        metodoPago: document.getElementById('ventaMetodoPago').value.toUpperCase(),
+        cuotas: document.getElementById('ventaCuotas').value,
+        facturada: document.getElementById('ventaFacturada').checked
+      };
+
+      mostrarSpinner(true);
+
+      llamarBackendPOST('registrarVenta', datos)
+        .then((res) => {
+          if (modalVentaInstance) modalVentaInstance.hide();
+          procesarRespuestaBackend(res);
+        })
+        .catch((err) => {
+          mostrarSpinner(false);
+          mostrarError('Error al registrar venta: ' + (err.message || err));
+        });
+    }
+
+    function eliminarPrenda(codigo) {
+      if (!confirm(`¿Seguro que deseas eliminar la prenda ${codigo.toUpperCase()}?`)) return;
+
+      mostrarSpinner(true);
+      llamarBackendPOST('eliminarPrenda', { codigo })
+        .then((res) => { procesarRespuestaBackend(res); })
+        .catch((err) => {
+          mostrarSpinner(false);
+          mostrarError('Error al eliminar: ' + (err.message || err));
+        });
+    }
+
+    function descargarCSV(tipo) {
+      let csvContent = "";
+      let nombreArchivo = "";
+
+      if (tipo === 'stock') {
+        if (!appData.stock || appData.stock.length === 0) {
+          alert("NO HAY DATOS DE STOCK PARA DESCARGAR.");
+          return;
+        }
+        nombreArchivo = "INDOMITA_STOCK_" + new Date().toISOString().slice(0,10) + ".csv";
+        csvContent = "Codigo;Nombre;Foto;Categoria;Color;Talle;Precio Base;Proveedor;Descuento (%);Estado\n";
+
+        appData.stock.forEach(item => {
+          const precioNum = parseNumeroSeguro(item.precio);
+          const descNum = parseNumeroSeguro(item.descuento);
+          csvContent += `"${(item.codigo||'').toUpperCase()}";"${(item.nombre||'').toUpperCase()}";"${item.foto||''}";"${(item.categoria||'').toUpperCase()}";"${(item.color||'').toUpperCase()}";"${(item.talle||'').toUpperCase()}";${precioNum};"${(item.proveedor||'').toUpperCase()}";${descNum};"${(item.estado||'').toUpperCase()}"\n`;
+        });
+
+      } else if (tipo === 'ventas') {
+        if (!appData.ventas || appData.ventas.length === 0) {
+          alert("NO HAY DATOS DE VENTAS PARA DESCARGAR.");
+          return;
+        }
+        nombreArchivo = "INDOMITA_VENTAS_" + new Date().toISOString().slice(0,10) + ".csv";
+        csvContent = "Fecha y Hora;Codigo;Nombre;Categoria;Color;Talle;Precio Lista;Descuento (%);Precio Final Cobrado;Forma de Pago;Cuotas;Facturado\n";
+
+        appData.ventas.forEach(v => {
+          const precioNum = parseNumeroSeguro(v.precio);
+          const descNum = parseNumeroSeguro(v.descuento);
+          const montoNum = parseNumeroSeguro(v.montoFinal);
+          csvContent += `"${v.fecha}";"${(v.codigo||'').toUpperCase()}";"${(v.nombre||'').toUpperCase()}";"${(v.categoria||'').toUpperCase()}";"${(v.color||'').toUpperCase()}";"${(v.talle||'').toUpperCase()}";${precioNum};${descNum};${montoNum};"${(v.metodoPago||'').toUpperCase()}";"${v.cuotas}";"${(v.facturada||'').toUpperCase()}"\n`;
+        });
+      }
+
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", nombreArchivo);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
