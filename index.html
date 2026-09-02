@@ -250,6 +250,10 @@
               <label class="form-label fw-bold">PROVEEDOR</label>
               <input type="text" id="prendaProveedor" class="form-control">
             </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">DETALLE <span class="text-muted fw-normal">(OPCIONAL)</span></label>
+              <textarea id="prendaDetalle" class="form-control" rows="2" placeholder="EJ: TIRO ALTO, CORTE ENTALLADO, TELA PREMIUM..."></textarea>
+            </div>
 
             <div class="mb-2">
               <label class="form-label fw-bold">FOTO DE LA PRENDA</label>
@@ -660,9 +664,11 @@
       const inputCodigo = document.getElementById('prendaCodigo');
       if (esManual) {
         inputCodigo.readOnly = false;
+        inputCodigo.required = true;
         inputCodigo.placeholder = 'EJ: REM-001';
       } else {
         inputCodigo.readOnly = true;
+        inputCodigo.required = false;
         inputCodigo.placeholder = '(AUTOMÁTICO)';
         inputCodigo.value = '';
       }
@@ -716,6 +722,7 @@
       document.getElementById('prendaCosto').value = item.costo || '';
       document.getElementById('prendaPrecio').value = item.precio || '';
       document.getElementById('prendaProveedor').value = (item.proveedor || '').toUpperCase();
+      document.getElementById('prendaDetalle').value = item.detalle || '';
       document.getElementById('prendaFotoBase64').value = item.foto || '';
 
       const img = document.getElementById('imgPreview');
@@ -764,6 +771,7 @@
         costo: document.getElementById('prendaCosto').value,
         precio: document.getElementById('prendaPrecio').value,
         proveedor: document.getElementById('prendaProveedor').value.toUpperCase(),
+        detalle: document.getElementById('prendaDetalle').value,
         foto: document.getElementById('prendaFotoBase64').value
       };
 
