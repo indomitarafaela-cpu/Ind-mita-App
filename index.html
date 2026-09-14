@@ -358,20 +358,42 @@
     let modalPrendaInstance = null;
     let modalVentaInstance = null;
 
-    async function llamarBackendGET(action) {
-      const res = await fetch(`${APPS_SCRIPT_URL}?action=${encodeURIComponent(action)}`);
-      if (!res.ok) throw new Error('Error de red (' + res.status + ')');
-      return res.json();
+    async function llamarBackendGET(action, intento = 1) {
+      const MAX_INTENTOS = 3;
+      try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?action=${encodeURIComponent(action)}`);
+        if (!res.ok) throw new Error('Error de red (' + res.status + ')');
+        return await res.json();
+      } catch (err) {
+        if (intento < MAX_INTENTOS) {
+          await esperar(1500 * intento);
+          return llamarBackendGET(action, intento + 1);
+        }
+        throw err;
+      }
     }
 
-    async function llamarBackendPOST(action, payload) {
-      const res = await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action, payload })
-      });
-      if (!res.ok) throw new Error('Error de red (' + res.status + ')');
-      return res.json();
+    async function esperar(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function llamarBackendPOST(action, payload, intento = 1) {
+      const MAX_INTENTOS = 3;
+      try {
+        const res = await fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action, payload })
+        });
+        if (!res.ok) throw new Error('Error de red (' + res.status + ')');
+        return await res.json();
+      } catch (err) {
+        if (intento < MAX_INTENTOS) {
+          await esperar(1500 * intento); // 1.5s, luego 3s
+          return llamarBackendPOST(action, payload, intento + 1);
+        }
+        throw err;
+      }
     }
 
     function parseNumeroSeguro(val) {
@@ -774,8 +796,12 @@
       reader.readAsDataURL(file);
     }
 
+    let guardandoPrenda = false;
+
     async function guardarPrendaForm(e) {
       e.preventDefault();
+      if (guardandoPrenda) return; // ya hay un guardado en curso, ignorar toques repetidos
+      guardandoPrenda = true;
 
       const selectCat = document.getElementById('selectPrendaCategoria').value;
       let categoriaFinal = selectCat;
@@ -808,6 +834,7 @@
         if (!res || res.status === 'error') {
           mostrarSpinner(false);
           mostrarError('Error al guardar prenda: ' + (res?.message || 'Error desconocido'));
+          guardandoPrenda = false;
           return;
         }
 
@@ -829,6 +856,8 @@
           renderizarStock(appData.stock);
         }
 
+        let hayErrorDeFoto = false;
+
         // Paso 2: Si hay nueva foto en Base64, subirla en segundo plano
         if (fotoBase64 && fotoBase64.startsWith('data:image')) {
           mostrarSpinner(true, "SUBIENDO FOTO A DRIVE...");
@@ -844,18 +873,24 @@
                 itemLocal.foto = resFoto.fotoUrl;
                 renderizarStock(appData.stock);
               }
+            } else {
+              hayErrorDeFoto = true;
+              mostrarError(`SE GUARDÓ "${res.item.codigo}" PERO LA FOTO NO SE PUDO SUBIR. ABRÍ "EDITAR" Y VOLVÉ A ELEGIRLA PARA REINTENTAR.`);
             }
           } catch (errFoto) {
-            console.warn("No se pudo subir la foto, pero los datos de la prenda quedaron guardados.", errFoto);
+            hayErrorDeFoto = true;
+            mostrarError(`SE GUARDÓ "${res.item.codigo}" PERO LA FOTO NO SE PUDO SUBIR (SIN CONEXIÓN). ABRÍ "EDITAR" Y VOLVÉ A ELEGIRLA PARA REINTENTAR.`);
           }
         }
 
         mostrarSpinner(false);
-        ocultarError();
+        if (!hayErrorDeFoto) ocultarError();
 
       } catch (err) {
         mostrarSpinner(false);
         mostrarError('Error al guardar prenda: ' + (err.message || err));
+      } finally {
+        guardandoPrenda = false;
       }
     }
 
