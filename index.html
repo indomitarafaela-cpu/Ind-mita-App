@@ -272,6 +272,18 @@
     </div>
   </div>
 
+  <!-- Modal Zoom Foto -->
+  <div class="modal fade" id="modalFotoZoom" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content bg-dark">
+        <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2 z-3" data-bs-dismiss="modal" style="z-index: 10;"></button>
+        <div class="modal-body d-flex justify-content-center align-items-center p-0">
+          <img id="imgFotoZoom" src="" class="img-fluid" style="max-height: 85vh; object-fit: contain;" alt="Foto ampliada">
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Venta -->
   <div class="modal fade" id="modalVenta" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -357,6 +369,7 @@
     let appData = { stock: [], ventas: [], categorias: [] };
     let modalPrendaInstance = null;
     let modalVentaInstance = null;
+    let modalFotoZoomInstance = null;
 
     async function llamarBackendGET(action, intento = 1) {
       const MAX_INTENTOS = 3;
@@ -423,8 +436,10 @@
       try {
         const elPrenda = document.getElementById('modalPrenda');
         const elVenta = document.getElementById('modalVenta');
+        const elZoom = document.getElementById('modalFotoZoom');
         if (elPrenda) modalPrendaInstance = new bootstrap.Modal(elPrenda);
         if (elVenta) modalVentaInstance = new bootstrap.Modal(elVenta);
+        if (elZoom) modalFotoZoomInstance = new bootstrap.Modal(elZoom);
       } catch (e) {
         console.error("Error al inicializar Modales:", e);
       }
@@ -536,6 +551,18 @@
       }
     }
 
+    function obtenerUrlImagen(url, ancho) {
+      if (!url || !url.includes('lh3.googleusercontent.com/d/')) return url;
+      return `${url}=w${ancho}`;
+    }
+
+    function abrirZoomFoto(url, defaultImg) {
+      const imgZoom = document.getElementById('imgFotoZoom');
+      if (!imgZoom || !modalFotoZoomInstance) return;
+      imgZoom.src = url || defaultImg;
+      modalFotoZoomInstance.show();
+    }
+
     function renderizarStock(items) {
       const contenedor = document.getElementById('contenedorStock');
       const totalLbl = document.getElementById('totalRegistros');
@@ -560,7 +587,7 @@
         return `
         <div class="col">
           <div class="card card-product h-100 position-relative">
-            <img src="${item.foto || defaultImg}" class="card-img-top product-img" alt="${item.nombre}" onerror="this.src='${defaultImg}'">
+            <img src="${obtenerUrlImagen(item.foto, 400) || defaultImg}" class="card-img-top product-img" style="cursor: zoom-in;" alt="${item.nombre}" onerror="this.src='${defaultImg}'" onclick="abrirZoomFoto('${item.foto || ''}', '${defaultImg}')">
             <div class="card-body d-flex flex-column">
               <span class="badge bg-primary mb-2 align-self-start">${(item.categoria || 'SIN CAT.').toUpperCase()}</span>
               <h6 class="card-title fw-bold text-dark mb-1">${(item.nombre || '').toUpperCase()}</h6>
