@@ -719,8 +719,8 @@
       document.getElementById('prendaNombre').value = (item.nombre || '').toUpperCase();
       document.getElementById('prendaTalle').value = (item.talle || '').toUpperCase();
       document.getElementById('prendaColor').value = (item.color || '').toUpperCase();
-      document.getElementById('prendaCosto').value = item.costo || '';
-      document.getElementById('prendaPrecio').value = item.precio || '';
+      document.getElementById('prendaCosto').value = item.costo ? parseNumeroSeguro(item.costo) : '';
+      document.getElementById('prendaPrecio').value = parseNumeroSeguro(item.precio);
       document.getElementById('prendaProveedor').value = (item.proveedor || '').toUpperCase();
       document.getElementById('prendaDetalle').value = item.detalle || '';
       document.getElementById('prendaFotoBase64').value = item.foto || '';
@@ -739,18 +739,33 @@
 
     function previewImagen(event) {
       const file = event.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          document.getElementById('prendaFotoBase64').value = e.target.result;
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const imgTemp = new Image();
+        imgTemp.onload = function() {
+          const MAX_ANCHO = 800;
+          const escala = Math.min(1, MAX_ANCHO / imgTemp.width);
+          const canvas = document.createElement('canvas');
+          canvas.width = imgTemp.width * escala;
+          canvas.height = imgTemp.height * escala;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(imgTemp, 0, 0, canvas.width, canvas.height);
+
+          const base64Comprimido = canvas.toDataURL('image/jpeg', 0.7);
+
+          document.getElementById('prendaFotoBase64').value = base64Comprimido;
           const img = document.getElementById('imgPreview');
           if (img) {
-            img.src = e.target.result;
+            img.src = base64Comprimido;
             img.classList.remove('d-none');
           }
         };
-        reader.readAsDataURL(file);
-      }
+        imgTemp.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
     }
 
     function guardarPrendaForm(e) {
