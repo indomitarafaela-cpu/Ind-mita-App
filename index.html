@@ -737,16 +737,30 @@
       reader.onload = function(e) {
         const imgTemp = new Image();
         imgTemp.onload = function() {
-          const MAX_ANCHO = 800;
-          const escala = Math.min(1, MAX_ANCHO / imgTemp.width);
+          const MAX_DIMENSION = 400; // Optimización Ultra Liviana
+          let width = imgTemp.width;
+          let height = imgTemp.height;
+
+          if (width > height) {
+            if (width > MAX_DIMENSION) {
+              height *= MAX_DIMENSION / width;
+              width = MAX_DIMENSION;
+            }
+          } else {
+            if (height > MAX_DIMENSION) {
+              width *= MAX_DIMENSION / height;
+              height = MAX_DIMENSION;
+            }
+          }
+
           const canvas = document.createElement('canvas');
-          canvas.width = imgTemp.width * escala;
-          canvas.height = imgTemp.height * escala;
+          canvas.width = width;
+          canvas.height = height;
 
           const ctx = canvas.getContext('2d');
-          ctx.drawImage(imgTemp, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(imgTemp, 0, 0, width, height);
 
-          const base64Comprimido = canvas.toDataURL('image/jpeg', 0.7);
+          const base64Comprimido = canvas.toDataURL('image/jpeg', 0.5);
 
           document.getElementById('prendaFotoBase64').value = base64Comprimido;
           const img = document.getElementById('imgPreview');
@@ -769,6 +783,8 @@
         categoriaFinal = document.getElementById('inputNuevaCategoria').value.trim();
       }
 
+      const fotoBase64 = document.getElementById('prendaFotoBase64').value;
+
       const datos = {
         codigo: document.getElementById('prendaCodigo').value.toUpperCase(),
         categoria: categoriaFinal.toUpperCase(),
@@ -779,22 +795,23 @@
         precio: document.getElementById('prendaPrecio').value,
         proveedor: document.getElementById('prendaProveedor').value.toUpperCase(),
         detalle: document.getElementById('prendaDetalle').value,
-        foto: document.getElementById('prendaFotoBase64').value
+        foto: fotoBase64.startsWith('http') ? fotoBase64 : '' // Si ya era URL de Drive la mantiene
       };
 
-      mostrarSpinner(true, "GUARDANDO PRENDA EN EL SISTEMA...");
+      mostrarSpinner(true, "GUARDANDO PRENDA...");
       if (modalPrendaInstance) modalPrendaInstance.hide();
 
       try {
+        // Paso 1: Guardar datos de la prenda al instante
         const res = await llamarBackendPOST('guardarPrenda', datos);
-        mostrarSpinner(false);
 
         if (!res || res.status === 'error') {
+          mostrarSpinner(false);
           mostrarError('Error al guardar prenda: ' + (res?.message || 'Error desconocido'));
           return;
         }
 
-        // Actualización Optimista del Frontend
+        // Actualizar UI Local al instante
         if (res.item) {
           const idx = appData.stock.findIndex(p => String(p.codigo).toUpperCase() === res.item.codigo);
           if (idx > -1) {
@@ -810,8 +827,32 @@
           }
 
           renderizarStock(appData.stock);
-          ocultarError();
         }
+
+        // Paso 2: Si hay nueva foto en Base64, subirla en segundo plano
+        if (fotoBase64 && fotoBase64.startsWith('data:image')) {
+          mostrarSpinner(true, "SUBIENDO FOTO A DRIVE...");
+          try {
+            const resFoto = await llamarBackendPOST('subirFotoPrenda', {
+              codigo: res.item.codigo,
+              fotoBase64: fotoBase64
+            });
+
+            if (resFoto && resFoto.status === 'success' && resFoto.fotoUrl) {
+              const itemLocal = appData.stock.find(p => String(p.codigo).toUpperCase() === resFoto.codigo);
+              if (itemLocal) {
+                itemLocal.foto = resFoto.fotoUrl;
+                renderizarStock(appData.stock);
+              }
+            }
+          } catch (errFoto) {
+            console.warn("No se pudo subir la foto, pero los datos de la prenda quedaron guardados.", errFoto);
+          }
+        }
+
+        mostrarSpinner(false);
+        ocultarError();
+
       } catch (err) {
         mostrarSpinner(false);
         mostrarError('Error al guardar prenda: ' + (err.message || err));
@@ -885,7 +926,6 @@
           return;
         }
 
-        // Remover de Stock y Agregar a Ventas Localmente
         if (res.codigoVendido) {
           appData.stock = appData.stock.filter(p => String(p.codigo).toUpperCase() !== res.codigoVendido);
           renderizarStock(appData.stock);
