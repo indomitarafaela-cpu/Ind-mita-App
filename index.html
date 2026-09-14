@@ -81,7 +81,7 @@
     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
       <span class="visually-hidden">CARGANDO...</span>
     </div>
-    <div class="mt-3 text-secondary fw-semibold">CARGANDO SISTEMA DE INDÓMITA...</div>
+    <div class="mt-3 text-secondary fw-semibold" id="loadingText">CARGANDO SISTEMA DE INDÓMITA...</div>
   </div>
 
   <!-- Navbar -->
@@ -352,7 +352,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
-    // URL de tu Apps Script publicado como aplicación web (termina en /exec)
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxh7fbISDmdD9tkZj39-FgdZNXMZElIbxwXLW0jk_PM-dXPrRlMxPXiYH2I8j53nml31w/exec';
 
     let appData = { stock: [], ventas: [], categorias: [] };
@@ -368,7 +367,7 @@
     async function llamarBackendPOST(action, payload) {
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita el preflight CORS
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action, payload })
       });
       if (!res.ok) throw new Error('Error de red (' + res.status + ')');
@@ -410,8 +409,10 @@
       cargarDatosIniciales();
     });
 
-    function mostrarSpinner(show) {
+    function mostrarSpinner(show, texto = "CARGANDO SISTEMA DE INDÓMITA...") {
       const spinner = document.getElementById('loadingSpinner');
+      const textEl = document.getElementById('loadingText');
+      if (textEl) textEl.innerText = texto;
       if (spinner) {
         if (show) spinner.classList.remove('d-none');
         else spinner.classList.add('d-none');
@@ -433,38 +434,29 @@
       if (banner) banner.classList.add('d-none');
     }
 
-    function procesarRespuestaBackend(response) {
-      mostrarSpinner(false);
-      if (!response) {
-        mostrarError("No se obtuvo respuesta del servidor.");
-        return false;
-      }
-      if (response.status === 'error') {
-        mostrarError(response.message || "Error al procesar la información.");
-        return false;
-      }
-      
-      ocultarError();
-      appData.stock = Array.isArray(response.stock) ? response.stock : [];
-      appData.ventas = Array.isArray(response.ventas) ? response.ventas : [];
-      appData.categorias = Array.isArray(response.categorias) ? response.categorias : [];
-
-      poblarCategorias();
-      renderizarStock(appData.stock);
-      renderizarVentas(appData.ventas);
-      return true;
-    }
-
     async function cargarDatosIniciales() {
-      mostrarSpinner(true);
+      mostrarSpinner(true, "CARGANDO STOCK Y VENTAS...");
       ocultarError();
 
       try {
-        const res = await llamarBackendGET('getInitialData');
-        procesarRespuestaBackend(res);
+        const response = await llamarBackendGET('getInitialData');
+        mostrarSpinner(false);
+
+        if (!response || response.status === 'error') {
+          mostrarError(response?.message || "Error al cargar datos.");
+          return;
+        }
+
+        appData.stock = Array.isArray(response.stock) ? response.stock : [];
+        appData.ventas = Array.isArray(response.ventas) ? response.ventas : [];
+        appData.categorias = Array.isArray(response.categorias) ? response.categorias : [];
+
+        poblarCategorias();
+        renderizarStock(appData.stock);
+        renderizarVentas(appData.ventas);
       } catch (err) {
         mostrarSpinner(false);
-        mostrarError("Error del Servidor: " + (err.message || err));
+        mostrarError("Error de conexión: " + (err.message || err));
       }
     }
 
@@ -768,7 +760,7 @@
       reader.readAsDataURL(file);
     }
 
-    function guardarPrendaForm(e) {
+    async function guardarPrendaForm(e) {
       e.preventDefault();
 
       const selectCat = document.getElementById('selectPrendaCategoria').value;
@@ -790,15 +782,40 @@
         foto: document.getElementById('prendaFotoBase64').value
       };
 
-      mostrarSpinner(true);
+      mostrarSpinner(true, "GUARDANDO PRENDA EN EL SISTEMA...");
       if (modalPrendaInstance) modalPrendaInstance.hide();
 
-      llamarBackendPOST('guardarPrenda', datos)
-        .then((res) => { procesarRespuestaBackend(res); })
-        .catch((err) => {
-          mostrarSpinner(false);
-          mostrarError('Error al guardar prenda: ' + (err.message || err));
-        });
+      try {
+        const res = await llamarBackendPOST('guardarPrenda', datos);
+        mostrarSpinner(false);
+
+        if (!res || res.status === 'error') {
+          mostrarError('Error al guardar prenda: ' + (res?.message || 'Error desconocido'));
+          return;
+        }
+
+        // Actualización Optimista del Frontend
+        if (res.item) {
+          const idx = appData.stock.findIndex(p => String(p.codigo).toUpperCase() === res.item.codigo);
+          if (idx > -1) {
+            appData.stock[idx] = res.item;
+          } else {
+            appData.stock.unshift(res.item);
+          }
+
+          if (res.item.categoria && !appData.categorias.includes(res.item.categoria)) {
+            appData.categorias.push(res.item.categoria);
+            appData.categorias.sort();
+            poblarCategorias();
+          }
+
+          renderizarStock(appData.stock);
+          ocultarError();
+        }
+      } catch (err) {
+        mostrarSpinner(false);
+        mostrarError('Error al guardar prenda: ' + (err.message || err));
+      }
     }
 
     function abrirModalVenta(codigo) {
@@ -840,7 +857,7 @@
       document.getElementById('ventaMontoFinal').value = total.toFixed(2);
     }
 
-    function guardarVentaForm(e) {
+    async function guardarVentaForm(e) {
       e.preventDefault();
       const datos = {
         codigo: document.getElementById('ventaCodigo').value.toUpperCase(),
@@ -856,29 +873,56 @@
         facturada: document.getElementById('ventaFacturada').checked
       };
 
-      mostrarSpinner(true);
+      mostrarSpinner(true, "REGISTRANDO VENTA...");
 
-      llamarBackendPOST('registrarVenta', datos)
-        .then((res) => {
-          if (modalVentaInstance) modalVentaInstance.hide();
-          procesarRespuestaBackend(res);
-        })
-        .catch((err) => {
-          mostrarSpinner(false);
-          mostrarError('Error al registrar venta: ' + (err.message || err));
-        });
+      try {
+        const res = await llamarBackendPOST('registrarVenta', datos);
+        if (modalVentaInstance) modalVentaInstance.hide();
+        mostrarSpinner(false);
+
+        if (!res || res.status === 'error') {
+          mostrarError('Error al registrar venta: ' + (res?.message || 'Error desconocido'));
+          return;
+        }
+
+        // Remover de Stock y Agregar a Ventas Localmente
+        if (res.codigoVendido) {
+          appData.stock = appData.stock.filter(p => String(p.codigo).toUpperCase() !== res.codigoVendido);
+          renderizarStock(appData.stock);
+        }
+        if (res.venta) {
+          appData.ventas.unshift(res.venta);
+          renderizarVentas(appData.ventas);
+        }
+        ocultarError();
+      } catch (err) {
+        mostrarSpinner(false);
+        mostrarError('Error al registrar venta: ' + (err.message || err));
+      }
     }
 
-    function eliminarPrenda(codigo) {
-      if (!confirm(`¿Seguro que deseas eliminar la prenda ${codigo.toUpperCase()}?`)) return;
+    async function eliminarPrenda(codigo) {
+      if (!confirm(`¿SEGURO QUE DESEAS ELIMINAR LA PRENDA ${codigo.toUpperCase()}?`)) return;
 
-      mostrarSpinner(true);
-      llamarBackendPOST('eliminarPrenda', { codigo })
-        .then((res) => { procesarRespuestaBackend(res); })
-        .catch((err) => {
-          mostrarSpinner(false);
-          mostrarError('Error al eliminar: ' + (err.message || err));
-        });
+      mostrarSpinner(true, "ELIMINANDO PRENDA...");
+      try {
+        const res = await llamarBackendPOST('eliminarPrenda', { codigo });
+        mostrarSpinner(false);
+
+        if (!res || res.status === 'error') {
+          mostrarError('Error al eliminar: ' + (res?.message || 'Error desconocido'));
+          return;
+        }
+
+        if (res.codigoEliminado) {
+          appData.stock = appData.stock.filter(p => String(p.codigo).toUpperCase() !== res.codigoEliminado);
+          renderizarStock(appData.stock);
+        }
+        ocultarError();
+      } catch (err) {
+        mostrarSpinner(false);
+        mostrarError('Error al eliminar: ' + (err.message || err));
+      }
     }
 
     function descargarCSV(tipo) {
