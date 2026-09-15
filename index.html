@@ -366,6 +366,10 @@
   <script>
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxh7fbISDmdD9tkZj39-FgdZNXMZElIbxwXLW0jk_PM-dXPrRlMxPXiYH2I8j53nml31w/exec';
 
+    const CLOUDINARY_CLOUD_NAME = 'np5ruaue';
+    const CLOUDINARY_UPLOAD_PRESET = 'INDOMITA_FOTOS';
+    const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
     let appData = { stock: [], ventas: [], categorias: [] };
     let modalPrendaInstance = null;
     let modalVentaInstance = null;
@@ -388,6 +392,31 @@
 
     async function esperar(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function subirFotoACloudinary(base64Data, intento = 1) {
+      const MAX_INTENTOS = 3;
+      try {
+        const formData = new FormData();
+        formData.append('file', base64Data);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+        const res = await fetch(CLOUDINARY_UPLOAD_URL, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) throw new Error('Error subiendo la foto (' + res.status + ')');
+        const data = await res.json();
+        if (!data.secure_url) throw new Error('Cloudinary no devolvió un link válido');
+        return data.secure_url;
+      } catch (err) {
+        if (intento < MAX_INTENTOS) {
+          await esperar(1000 * intento); // 1s, luego 2s
+          return subirFotoACloudinary(base64Data, intento + 1);
+        }
+        throw err;
+      }
     }
 
     async function llamarBackendPOST(action, payload, intento = 1) {
@@ -552,8 +581,15 @@
     }
 
     function obtenerUrlImagen(url, ancho) {
-      if (!url || !url.includes('lh3.googleusercontent.com/d/')) return url;
-      return `${url}=w${ancho}`;
+      if (!url) return url;
+      if (url.includes('lh3.googleusercontent.com/d/')) {
+        return `${url}=w${ancho}`;
+      }
+      if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+        // pide una versión chica, calidad automática y formato automático (WebP/AVIF si el navegador lo soporta)
+        return url.replace('/upload/', `/upload/w_${ancho},q_auto,f_auto/`);
+      }
+      return url;
     }
 
     function abrirZoomFoto(url, defaultImg) {
@@ -837,31 +873,44 @@
       }
 
       const fotoBase64 = document.getElementById('prendaFotoBase64').value;
-
-      const datos = {
-        codigo: document.getElementById('prendaCodigo').value.toUpperCase(),
-        categoria: categoriaFinal.toUpperCase(),
-        nombre: document.getElementById('prendaNombre').value.toUpperCase(),
-        talle: document.getElementById('prendaTalle').value.toUpperCase(),
-        color: document.getElementById('prendaColor').value.toUpperCase(),
-        costo: document.getElementById('prendaCosto').value,
-        precio: document.getElementById('prendaPrecio').value,
-        proveedor: document.getElementById('prendaProveedor').value.toUpperCase(),
-        detalle: document.getElementById('prendaDetalle').value,
-        foto: fotoBase64.startsWith('http') ? fotoBase64 : '' // Si ya era URL de Drive la mantiene
-      };
+      let fotoFinal = fotoBase64.startsWith('http') ? fotoBase64 : ''; // si ya era una URL (Drive o Cloudinary), la mantiene
+      let errorAlSubirFoto = false;
 
       mostrarSpinner(true, "GUARDANDO PRENDA...");
       if (modalPrendaInstance) modalPrendaInstance.hide();
 
       try {
-        // Paso 1: Guardar datos de la prenda al instante
+        // Paso 1: si hay una foto nueva (recién elegida), subirla directo a Cloudinary
+        if (fotoBase64 && fotoBase64.startsWith('data:image')) {
+          mostrarSpinner(true, "SUBIENDO FOTO...");
+          try {
+            fotoFinal = await subirFotoACloudinary(fotoBase64);
+          } catch (errFoto) {
+            errorAlSubirFoto = true;
+            fotoFinal = ''; // seguimos guardando la prenda igual, sin foto
+          }
+        }
+
+        const datos = {
+          codigo: document.getElementById('prendaCodigo').value.toUpperCase(),
+          categoria: categoriaFinal.toUpperCase(),
+          nombre: document.getElementById('prendaNombre').value.toUpperCase(),
+          talle: document.getElementById('prendaTalle').value.toUpperCase(),
+          color: document.getElementById('prendaColor').value.toUpperCase(),
+          costo: document.getElementById('prendaCosto').value,
+          precio: document.getElementById('prendaPrecio').value,
+          proveedor: document.getElementById('prendaProveedor').value.toUpperCase(),
+          detalle: document.getElementById('prendaDetalle').value,
+          foto: fotoFinal
+        };
+
+        // Paso 2: guardar los datos de la prenda (ya con el link de la foto, si había)
+        mostrarSpinner(true, "GUARDANDO PRENDA...");
         const res = await llamarBackendPOST('guardarPrenda', datos);
 
         if (!res || res.status === 'error') {
           mostrarSpinner(false);
           mostrarError('Error al guardar prenda: ' + (res?.message || 'Error desconocido'));
-          guardandoPrenda = false;
           return;
         }
 
@@ -883,35 +932,13 @@
           renderizarStock(appData.stock);
         }
 
-        let hayErrorDeFoto = false;
-
-        // Paso 2: Si hay nueva foto en Base64, subirla en segundo plano
-        if (fotoBase64 && fotoBase64.startsWith('data:image')) {
-          mostrarSpinner(true, "SUBIENDO FOTO A DRIVE...");
-          try {
-            const resFoto = await llamarBackendPOST('subirFotoPrenda', {
-              codigo: res.item.codigo,
-              fotoBase64: fotoBase64
-            });
-
-            if (resFoto && resFoto.status === 'success' && resFoto.fotoUrl) {
-              const itemLocal = appData.stock.find(p => String(p.codigo).toUpperCase() === resFoto.codigo);
-              if (itemLocal) {
-                itemLocal.foto = resFoto.fotoUrl;
-                renderizarStock(appData.stock);
-              }
-            } else {
-              hayErrorDeFoto = true;
-              mostrarError(`SE GUARDÓ "${res.item.codigo}" PERO LA FOTO NO SE PUDO SUBIR. ABRÍ "EDITAR" Y VOLVÉ A ELEGIRLA PARA REINTENTAR.`);
-            }
-          } catch (errFoto) {
-            hayErrorDeFoto = true;
-            mostrarError(`SE GUARDÓ "${res.item.codigo}" PERO LA FOTO NO SE PUDO SUBIR (SIN CONEXIÓN). ABRÍ "EDITAR" Y VOLVÉ A ELEGIRLA PARA REINTENTAR.`);
-          }
-        }
-
         mostrarSpinner(false);
-        if (!hayErrorDeFoto) ocultarError();
+
+        if (errorAlSubirFoto) {
+          mostrarError(`SE GUARDÓ "${res.item.codigo}" PERO LA FOTO NO SE PUDO SUBIR. ABRÍ "EDITAR" Y VOLVÉ A ELEGIRLA PARA REINTENTAR.`);
+        } else {
+          ocultarError();
+        }
 
       } catch (err) {
         mostrarSpinner(false);
